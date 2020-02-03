@@ -1,5 +1,5 @@
 /*
- * Copyright © 2016-2018 The Thingsboard Authors
+ * Copyright © 2016-2020 The Thingsboard Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,13 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-/*@ngInject*/
-export default function ThingsboardMissingTranslateHandler($log, types) {
+ export default angular.module('thingsboard.locale', [])
+                       .factory('tbMissingTranslationHandler', ThingsboardMissingTranslateHandler)
+                       .name;
 
-    return function (translationId) {
-        if (translationId && !translationId.startsWith(types.translate.customTranslationsPrefix)) {
+/*@ngInject*/
+function ThingsboardMissingTranslateHandler(/*$log, types*/) {
+
+    return function (/*translationId*/) {
+        /*if (translationId && !translationId.startsWith(types.translate.customTranslationsPrefix)) {
             $log.warn('Translation for ' + translationId + ' doesn\'t exist');
-        }
+        }*/
     };
 
 }

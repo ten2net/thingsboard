@@ -1,5 +1,5 @@
 /*
- * Copyright © 2016-2018 The Thingsboard Authors
+ * Copyright © 2016-2020 The Thingsboard Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -69,6 +69,10 @@ export default class TbCanvasDigitalGauge {
         this.localSettings.title = ((settings.showTitle === true) ?
             (settings.title && settings.title.length > 0 ?
                 settings.title : dataKey.label) : '');
+
+        if (!this.localSettings.unitTitle && this.localSettings.showTimestamp) {
+            this.localSettings.unitTitle = ' ';
+        }
 
         this.localSettings.titleFont = {};
         var settingsTitleFont = settings.titleFont;
@@ -205,6 +209,7 @@ export default class TbCanvasDigitalGauge {
                 }
                 var value = tvPair[1];
                 if(value !== this.gauge.value) {
+                    this.gauge._value = value;
                     this.gauge.value = value;
                 } else if (this.localSettings.showTimestamp && this.gauge.timestamp != timestamp) {
                     this.gauge.timestamp = timestamp;

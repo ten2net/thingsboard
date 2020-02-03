@@ -1,5 +1,5 @@
 /*
- * Copyright © 2016-2018 The Thingsboard Authors
+ * Copyright © 2016-2020 The Thingsboard Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,9 +44,9 @@ function TimeseriesTableWidget() {
 }
 
 /*@ngInject*/
-function TimeseriesTableWidgetController($element, $scope, $filter) {
+function TimeseriesTableWidgetController($element, $scope, $filter, $timeout, types) {
     var vm = this;
-    let dateFormatFilter = 'yyyy-MM-dd HH:mm:ss';
+    let dateFormatFilter;
 
     vm.sources = [];
     vm.sourceIndex = 0;
@@ -58,10 +58,16 @@ function TimeseriesTableWidgetController($element, $scope, $filter) {
 
     vm.enterFilterMode = enterFilterMode;
     vm.exitFilterMode = exitFilterMode;
+    vm.onRowClick = onRowClick;
+    vm.onActionButtonClick = onActionButtonClick;
+    vm.actionCellDescriptors = [];
 
     function enterFilterMode () {
         vm.query.search = '';
         vm.ctx.hideTitlePanel = true;
+        $timeout(()=>{
+            angular.element(vm.ctx.$container).find('.searchInput').focus();
+        })
     }
 
     function exitFilterMode () {
@@ -90,7 +96,9 @@ function TimeseriesTableWidgetController($element, $scope, $filter) {
 
     function initialize() {
         vm.ctx.widgetActions = [ vm.searchAction ];
+        vm.actionCellDescriptors = vm.ctx.actionsApi.getActionDescriptors('actionCellButton');
         vm.showTimestamp = vm.settings.showTimestamp !== false;
+        dateFormatFilter = (vm.settings.showMilliseconds !== true) ? 'yyyy-MM-dd HH:mm:ss' :  'yyyy-MM-dd HH:mm:ss.sss';
         var origColor = vm.widgetConfig.color || 'rgba(0, 0, 0, 0.87)';
         var defaultColor = tinycolor(origColor);
         var mdDark = defaultColor.setAlpha(0.87).toRgbString();
@@ -176,6 +184,30 @@ function TimeseriesTableWidgetController($element, $scope, $filter) {
         updatePage(source);
     }
 
+    function onRowClick($event, row) {
+        if ($event) {
+            $event.stopPropagation();
+        }
+        var descriptors = vm.ctx.actionsApi.getActionDescriptors('rowClick');
+        if (descriptors.length) {
+            var entityId = vm.ctx.activeEntityInfo.entityId;
+            var entityName = vm.ctx.activeEntityInfo.entityName;
+            var entityLabel = vm.ctx.activeEntityInfo.entityLabel;
+            vm.ctx.actionsApi.handleWidgetAction($event, descriptors[0], entityId, entityName, row, entityLabel);
+        }
+    }
+
+    function onActionButtonClick($event, row, actionDescriptor) {
+        if ($event) {
+            $event.stopPropagation();
+        }
+        var entityId = vm.ctx.activeEntityInfo.entityId;
+        var entityName = vm.ctx.activeEntityInfo.entityName;
+        var entityLabel = vm.ctx.activeEntityInfo.entityLabel;
+        vm.ctx.actionsApi.handleWidgetAction($event, actionDescriptor, entityId, entityName, row, entityLabel);
+    }
+
+
     vm.cellStyle = function(source, index, value) {
         var style = {};
         if (index > 0) {
@@ -214,7 +246,9 @@ function TimeseriesTableWidgetController($element, $scope, $filter) {
                     content = strContent;
                 }
             } else {
-                content = vm.ctx.utils.formatValue(value, contentInfo.decimals, contentInfo.units);
+                var decimals = (contentInfo.decimals || contentInfo.decimals === 0) ? contentInfo.decimals : vm.widgetConfig.decimals;
+                var units = contentInfo.units || vm.widgetConfig.units;
+                content = vm.ctx.utils.formatValue(value, decimals, units, true);
             }
             return content;
         }
@@ -223,8 +257,28 @@ function TimeseriesTableWidgetController($element, $scope, $filter) {
     $scope.$watch('vm.sourceIndex', function(newIndex, oldIndex) {
         if (newIndex != oldIndex) {
             updateSourceData(vm.sources[vm.sourceIndex]);
+            updateActiveEntityInfo();
         }
     });
+
+    function updateActiveEntityInfo() {
+        var source = vm.sources[vm.sourceIndex];
+        var activeEntityInfo = null;
+        if (source) {
+            var datasource = source.datasource;
+            if (datasource.type === types.datasourceType.entity &&
+                datasource.entityType && datasource.entityId) {
+                activeEntityInfo = {
+                    entityId: {
+                        entityType: datasource.entityType,
+                        id: datasource.entityId
+                    },
+                    entityName: datasource.entityName
+                };
+            }
+        }
+        vm.ctx.activeEntityInfo = activeEntityInfo;
+    }
 
     function updateDatasources() {
         vm.sources = [];
@@ -309,6 +363,7 @@ function TimeseriesTableWidgetController($element, $scope, $filter) {
                 vm.sources.push(source);
             }
         }
+        updateActiveEntityInfo();
     }
 
     function updatePage(source) {
@@ -364,7 +419,18 @@ function TimeseriesTableWidgetController($element, $scope, $filter) {
         }
         var rows = [];
         for (var t in rowsMap) {
-            rows.push(rowsMap[t]);
+            if (vm.settings.hideEmptyLines)
+			{
+                var hideLine = true;
+                for (var _c = 0; (_c < data.length) && hideLine; _c++) {
+                    if (rowsMap[t][_c+1])
+                        hideLine = false;
+                }
+                if (!hideLine)
+                   rows.push(rowsMap[t]);
+            }
+            else
+                rows.push(rowsMap[t]);
         }
         return rows;
     }

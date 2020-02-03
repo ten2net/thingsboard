@@ -1,5 +1,5 @@
 /**
- * Copyright © 2016-2018 The Thingsboard Authors
+ * Copyright © 2016-2020 The Thingsboard Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,8 +15,10 @@
  */
 package org.thingsboard.server.dao.event;
 
+import com.google.common.util.concurrent.ListenableFuture;
 import org.thingsboard.server.common.data.Event;
 import org.thingsboard.server.common.data.id.EntityId;
+import org.thingsboard.server.common.data.id.TenantId;
 import org.thingsboard.server.common.data.page.TimePageLink;
 import org.thingsboard.server.dao.Dao;
 
@@ -25,7 +27,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * The Interface DeviceDao.
+ * The Interface EventDao.
  */
 public interface EventDao extends Dao<Event> {
 
@@ -35,7 +37,15 @@ public interface EventDao extends Dao<Event> {
      * @param event the event object
      * @return saved event object
      */
-    Event save(Event event);
+    Event save(TenantId tenantId, Event event);
+
+    /**
+     * Save or update event object async
+     *
+     * @param event the event object
+     * @return saved event object future
+     */
+    ListenableFuture<Event> saveAsync(Event event);
 
     /**
      * Save event object if it is not yet saved
@@ -76,4 +86,16 @@ public interface EventDao extends Dao<Event> {
      * @return the event list
      */
     List<Event> findEvents(UUID tenantId, EntityId entityId, String eventType, TimePageLink pageLink);
+
+    /**
+     * Find latest events by tenantId, entityId and eventType.
+     *
+     * @param tenantId the tenantId
+     * @param entityId the entityId
+     * @param eventType the eventType
+     * @param limit the limit
+     * @return the event list
+     */
+    List<Event> findLatestEvents(UUID tenantId, EntityId entityId, String eventType, int limit);
+
 }

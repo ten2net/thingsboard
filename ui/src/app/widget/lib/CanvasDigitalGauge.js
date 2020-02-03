@@ -1,5 +1,5 @@
 /*
- * Copyright © 2016-2018 The Thingsboard Authors
+ * Copyright © 2016-2020 The Thingsboard Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -204,8 +204,13 @@ export default class CanvasDigitalGauge extends canvasGauges.BaseGauge {
             }
 
             var valueChanged = false;
-
-            if (!this.elementValueClone.initialized || this.elementValueClone.renderedValue !== this.value || (options.showTimestamp && this.elementValueClone.renderedTimestamp !== this.timestamp)) {
+            if (!this.elementValueClone.initialized || angular.isDefined(this._value) && this.elementValueClone.renderedValue !== this._value || (options.showTimestamp && this.elementValueClone.renderedTimestamp !== this.timestamp)) {
+                if (angular.isDefined(this._value)) {
+                    this.elementValueClone.renderedValue = this._value;
+                }
+                if (angular.isUndefined(this.elementValueClone.renderedValue)) {
+                    this.elementValueClone.renderedValue = this.value;
+                }
                 let context = this.contextValueClone;
                 // clear the cache
                 context.clearRect(x, y, w, h);
@@ -214,7 +219,7 @@ export default class CanvasDigitalGauge extends canvasGauges.BaseGauge {
                 context.drawImage(canvas.elementClone, x, y, w, h);
                 context.save();
 
-                drawDigitalValue(context, options, this.value);
+                drawDigitalValue(context, options, this.elementValueClone.renderedValue);
 
                 if (options.showTimestamp) {
                     drawDigitalLabel(context, options);
@@ -222,7 +227,6 @@ export default class CanvasDigitalGauge extends canvasGauges.BaseGauge {
                 }
 
                 this.elementValueClone.initialized = true;
-                this.elementValueClone.renderedValue = this.value;
 
                 valueChanged = true;
             }

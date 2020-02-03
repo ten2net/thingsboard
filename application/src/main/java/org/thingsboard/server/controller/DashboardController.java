@@ -1,5 +1,5 @@
 /**
- * Copyright © 2016-2018 The Thingsboard Authors
+ * Copyright © 2016-2020 The Thingsboard Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,11 +15,25 @@
  */
 package org.thingsboard.server.controller;
 
+import lombok.Getter;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
-import org.thingsboard.server.common.data.*;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
+import org.thingsboard.server.common.data.Customer;
+import org.thingsboard.server.common.data.Dashboard;
+import org.thingsboard.server.common.data.DashboardInfo;
+import org.thingsboard.server.common.data.EntityType;
+import org.thingsboard.server.common.data.ShortCustomerInfo;
 import org.thingsboard.server.common.data.audit.ActionType;
+import org.thingsboard.server.common.data.exception.ThingsboardException;
 import org.thingsboard.server.common.data.id.CustomerId;
 import org.thingsboard.server.common.data.id.DashboardId;
 import org.thingsboard.server.common.data.id.TenantId;
@@ -27,9 +41,8 @@ import org.thingsboard.server.common.data.page.TextPageData;
 import org.thingsboard.server.common.data.page.TextPageLink;
 import org.thingsboard.server.common.data.page.TimePageData;
 import org.thingsboard.server.common.data.page.TimePageLink;
-import org.thingsboard.server.dao.exception.IncorrectParameterException;
-import org.thingsboard.server.dao.model.ModelConstants;
-import org.thingsboard.server.exception.ThingsboardException;
+import org.thingsboard.server.service.security.permission.Operation;
+import org.thingsboard.server.service.security.permission.Resource;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -40,11 +53,22 @@ public class DashboardController extends BaseController {
 
     public static final String DASHBOARD_ID = "dashboardId";
 
+    @Value("${dashboard.max_datapoints_limit}")
+    private long maxDatapointsLimit;
+
+
     @PreAuthorize("hasAnyAuthority('SYS_ADMIN', 'TENANT_ADMIN', 'CUSTOMER_USER')")
     @RequestMapping(value = "/dashboard/serverTime", method = RequestMethod.GET)
     @ResponseBody
     public long getServerTime() throws ThingsboardException {
         return System.currentTimeMillis();
+    }
+
+    @PreAuthorize("hasAnyAuthority('SYS_ADMIN', 'TENANT_ADMIN', 'CUSTOMER_USER')")
+    @RequestMapping(value = "/dashboard/maxDatapointsLimit", method = RequestMethod.GET)
+    @ResponseBody
+    public long getMaxDatapointsLimit() throws ThingsboardException {
+        return maxDatapointsLimit;
     }
 
     @PreAuthorize("hasAnyAuthority('SYS_ADMIN', 'TENANT_ADMIN', 'CUSTOMER_USER')")
@@ -54,7 +78,7 @@ public class DashboardController extends BaseController {
         checkParameter(DASHBOARD_ID, strDashboardId);
         try {
             DashboardId dashboardId = new DashboardId(toUUID(strDashboardId));
-            return checkDashboardInfoId(dashboardId);
+            return checkDashboardInfoId(dashboardId, Operation.READ);
         } catch (Exception e) {
             throw handleException(e);
         }
@@ -67,7 +91,7 @@ public class DashboardController extends BaseController {
         checkParameter(DASHBOARD_ID, strDashboardId);
         try {
             DashboardId dashboardId = new DashboardId(toUUID(strDashboardId));
-            return checkDashboardId(dashboardId);
+            return checkDashboardId(dashboardId, Operation.READ);
         } catch (Exception e) {
             throw handleException(e);
         }
@@ -79,6 +103,12 @@ public class DashboardController extends BaseController {
     public Dashboard saveDashboard(@RequestBody Dashboard dashboard) throws ThingsboardException {
         try {
             dashboard.setTenantId(getCurrentUser().getTenantId());
+
+            Operation operation = dashboard.getId() == null ? Operation.CREATE : Operation.WRITE;
+
+            accessControlService.checkPermission(getCurrentUser(), Resource.DASHBOARD, operation,
+                    dashboard.getId(), dashboard);
+
             Dashboard savedDashboard = checkNotNull(dashboardService.saveDashboard(dashboard));
 
             logEntityAction(savedDashboard.getId(), savedDashboard,
@@ -101,8 +131,8 @@ public class DashboardController extends BaseController {
         checkParameter(DASHBOARD_ID, strDashboardId);
         try {
             DashboardId dashboardId = new DashboardId(toUUID(strDashboardId));
-            Dashboard dashboard = checkDashboardId(dashboardId);
-            dashboardService.deleteDashboard(dashboardId);
+            Dashboard dashboard = checkDashboardId(dashboardId, Operation.DELETE);
+            dashboardService.deleteDashboard(getCurrentUser().getTenantId(), dashboardId);
 
             logEntityAction(dashboardId, dashboard,
                     null,
@@ -128,12 +158,12 @@ public class DashboardController extends BaseController {
         checkParameter(DASHBOARD_ID, strDashboardId);
         try {
             CustomerId customerId = new CustomerId(toUUID(strCustomerId));
-            Customer customer = checkCustomerId(customerId);
+            Customer customer = checkCustomerId(customerId, Operation.READ);
 
             DashboardId dashboardId = new DashboardId(toUUID(strDashboardId));
-            checkDashboardId(dashboardId);
+            checkDashboardId(dashboardId, Operation.ASSIGN_TO_CUSTOMER);
             
-            Dashboard savedDashboard = checkNotNull(dashboardService.assignDashboardToCustomer(dashboardId, customerId));
+            Dashboard savedDashboard = checkNotNull(dashboardService.assignDashboardToCustomer(getCurrentUser().getTenantId(), dashboardId, customerId));
 
             logEntityAction(dashboardId, savedDashboard,
                     customerId,
@@ -160,11 +190,11 @@ public class DashboardController extends BaseController {
         checkParameter(DASHBOARD_ID, strDashboardId);
         try {
             CustomerId customerId = new CustomerId(toUUID(strCustomerId));
-            Customer customer = checkCustomerId(customerId);
+            Customer customer = checkCustomerId(customerId, Operation.READ);
             DashboardId dashboardId = new DashboardId(toUUID(strDashboardId));
-            Dashboard dashboard = checkDashboardId(dashboardId);
+            Dashboard dashboard = checkDashboardId(dashboardId, Operation.UNASSIGN_FROM_CUSTOMER);
 
-            Dashboard savedDashboard = checkNotNull(dashboardService.unassignDashboardFromCustomer(dashboardId, customerId));
+            Dashboard savedDashboard = checkNotNull(dashboardService.unassignDashboardFromCustomer(getCurrentUser().getTenantId(), dashboardId, customerId));
 
             logEntityAction(dashboardId, dashboard,
                     customerId,
@@ -189,7 +219,7 @@ public class DashboardController extends BaseController {
         checkParameter(DASHBOARD_ID, strDashboardId);
         try {
             DashboardId dashboardId = new DashboardId(toUUID(strDashboardId));
-            Dashboard dashboard = checkDashboardId(dashboardId);
+            Dashboard dashboard = checkDashboardId(dashboardId, Operation.ASSIGN_TO_CUSTOMER);
 
             Set<CustomerId> customerIds = new HashSet<>();
             if (strCustomerIds != null) {
@@ -220,7 +250,7 @@ public class DashboardController extends BaseController {
             } else {
                 Dashboard savedDashboard = null;
                 for (CustomerId customerId : addedCustomerIds) {
-                    savedDashboard = checkNotNull(dashboardService.assignDashboardToCustomer(dashboardId, customerId));
+                    savedDashboard = checkNotNull(dashboardService.assignDashboardToCustomer(getCurrentUser().getTenantId(), dashboardId, customerId));
                     ShortCustomerInfo customerInfo = savedDashboard.getAssignedCustomerInfo(customerId);
                     logEntityAction(dashboardId, savedDashboard,
                             customerId,
@@ -228,7 +258,7 @@ public class DashboardController extends BaseController {
                 }
                 for (CustomerId customerId : removedCustomerIds) {
                     ShortCustomerInfo customerInfo = dashboard.getAssignedCustomerInfo(customerId);
-                    savedDashboard = checkNotNull(dashboardService.unassignDashboardFromCustomer(dashboardId, customerId));
+                    savedDashboard = checkNotNull(dashboardService.unassignDashboardFromCustomer(getCurrentUser().getTenantId(), dashboardId, customerId));
                     logEntityAction(dashboardId, dashboard,
                             customerId,
                             ActionType.UNASSIGNED_FROM_CUSTOMER, null, strDashboardId, customerId.toString(), customerInfo.getTitle());
@@ -254,7 +284,7 @@ public class DashboardController extends BaseController {
         checkParameter(DASHBOARD_ID, strDashboardId);
         try {
             DashboardId dashboardId = new DashboardId(toUUID(strDashboardId));
-            Dashboard dashboard = checkDashboardId(dashboardId);
+            Dashboard dashboard = checkDashboardId(dashboardId, Operation.ASSIGN_TO_CUSTOMER);
 
             Set<CustomerId> customerIds = new HashSet<>();
             if (strCustomerIds != null) {
@@ -271,7 +301,7 @@ public class DashboardController extends BaseController {
             } else {
                 Dashboard savedDashboard = null;
                 for (CustomerId customerId : customerIds) {
-                    savedDashboard = checkNotNull(dashboardService.assignDashboardToCustomer(dashboardId, customerId));
+                    savedDashboard = checkNotNull(dashboardService.assignDashboardToCustomer(getCurrentUser().getTenantId(), dashboardId, customerId));
                     ShortCustomerInfo customerInfo = savedDashboard.getAssignedCustomerInfo(customerId);
                     logEntityAction(dashboardId, savedDashboard,
                             customerId,
@@ -297,7 +327,7 @@ public class DashboardController extends BaseController {
         checkParameter(DASHBOARD_ID, strDashboardId);
         try {
             DashboardId dashboardId = new DashboardId(toUUID(strDashboardId));
-            Dashboard dashboard = checkDashboardId(dashboardId);
+            Dashboard dashboard = checkDashboardId(dashboardId, Operation.UNASSIGN_FROM_CUSTOMER);
 
             Set<CustomerId> customerIds = new HashSet<>();
             if (strCustomerIds != null) {
@@ -315,7 +345,7 @@ public class DashboardController extends BaseController {
                 Dashboard savedDashboard = null;
                 for (CustomerId customerId : customerIds) {
                     ShortCustomerInfo customerInfo = dashboard.getAssignedCustomerInfo(customerId);
-                    savedDashboard = checkNotNull(dashboardService.unassignDashboardFromCustomer(dashboardId, customerId));
+                    savedDashboard = checkNotNull(dashboardService.unassignDashboardFromCustomer(getCurrentUser().getTenantId(), dashboardId, customerId));
                     logEntityAction(dashboardId, dashboard,
                             customerId,
                             ActionType.UNASSIGNED_FROM_CUSTOMER, null, strDashboardId, customerId.toString(), customerInfo.getTitle());
@@ -340,9 +370,9 @@ public class DashboardController extends BaseController {
         checkParameter(DASHBOARD_ID, strDashboardId);
         try {
             DashboardId dashboardId = new DashboardId(toUUID(strDashboardId));
-            Dashboard dashboard = checkDashboardId(dashboardId);
+            Dashboard dashboard = checkDashboardId(dashboardId, Operation.ASSIGN_TO_CUSTOMER);
             Customer publicCustomer = customerService.findOrCreatePublicCustomer(dashboard.getTenantId());
-            Dashboard savedDashboard = checkNotNull(dashboardService.assignDashboardToCustomer(dashboardId, publicCustomer.getId()));
+            Dashboard savedDashboard = checkNotNull(dashboardService.assignDashboardToCustomer(getCurrentUser().getTenantId(), dashboardId, publicCustomer.getId()));
 
             logEntityAction(dashboardId, savedDashboard,
                     publicCustomer.getId(),
@@ -366,10 +396,10 @@ public class DashboardController extends BaseController {
         checkParameter(DASHBOARD_ID, strDashboardId);
         try {
             DashboardId dashboardId = new DashboardId(toUUID(strDashboardId));
-            Dashboard dashboard = checkDashboardId(dashboardId);
+            Dashboard dashboard = checkDashboardId(dashboardId, Operation.UNASSIGN_FROM_CUSTOMER);
             Customer publicCustomer = customerService.findOrCreatePublicCustomer(dashboard.getTenantId());
 
-            Dashboard savedDashboard = checkNotNull(dashboardService.unassignDashboardFromCustomer(dashboardId, publicCustomer.getId()));
+            Dashboard savedDashboard = checkNotNull(dashboardService.unassignDashboardFromCustomer(getCurrentUser().getTenantId(), dashboardId, publicCustomer.getId()));
 
             logEntityAction(dashboardId, dashboard,
                     publicCustomer.getId(),
@@ -397,7 +427,7 @@ public class DashboardController extends BaseController {
             @RequestParam(required = false) String textOffset) throws ThingsboardException {
         try {
             TenantId tenantId = new TenantId(toUUID(strTenantId));
-            checkTenantId(tenantId);
+            checkTenantId(tenantId, Operation.READ);
             TextPageLink pageLink = createPageLink(limit, textSearch, idOffset, textOffset);
             return checkNotNull(dashboardService.findDashboardsByTenantId(tenantId, pageLink));
         } catch (Exception e) {
@@ -436,7 +466,7 @@ public class DashboardController extends BaseController {
         try {
             TenantId tenantId = getCurrentUser().getTenantId();
             CustomerId customerId = new CustomerId(toUUID(strCustomerId));
-            checkCustomerId(customerId);
+            checkCustomerId(customerId, Operation.READ);
             TimePageLink pageLink = createPageLink(limit, startTime, endTime, ascOrder, offset);
             return checkNotNull(dashboardService.findDashboardsByTenantIdAndCustomerId(tenantId, customerId, pageLink).get());
         } catch (Exception e) {

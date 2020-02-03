@@ -1,6 +1,6 @@
 <!--
 
-    Copyright © 2016-2018 The Thingsboard Authors
+    Copyright © 2016-2020 The Thingsboard Authors
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -15,11 +15,20 @@
     limitations under the License.
 
 -->
+<md-button ng-click="onSetUserCredentialsEnabled({userCredentialsEnabled: false})" ng-show="!isEdit && isUserCredentialsEnabled()" class="md-raised md-primary">{{ 'user.disable-account' |
+    translate }}
+</md-button>
+<md-button ng-click="onSetUserCredentialsEnabled({userCredentialsEnabled: true})" ng-show="!isEdit && !isUserCredentialsEnabled()" class="md-raised md-primary">{{ 'user.enable-account' |
+    translate }}
+</md-button>
 <md-button ng-click="onDisplayActivationLink({event: $event})" ng-show="!isEdit" class="md-raised md-primary">{{
     'user.display-activation-link' | translate }}
 </md-button>
 <md-button ng-click="onResendActivation({event: $event})" ng-show="!isEdit" class="md-raised md-primary">{{
     'user.resend-activation' | translate }}
+</md-button>
+<md-button ng-click="onLoginAsUser({event: $event})" ng-show="!isEdit && loginAsUserEnabled" class="md-raised md-primary">{{
+    (isTenantAdmin() ? 'user.login-as-tenant-admin' : 'user.login-as-customer-user') | translate }}
 </md-button>
 <md-button ng-click="onDeleteUser({event: $event})" ng-show="!isEdit" class="md-raised md-primary">{{ 'user.delete' |
     translate }}

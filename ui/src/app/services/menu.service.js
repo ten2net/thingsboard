@@ -1,5 +1,5 @@
 /*
- * Copyright © 2016-2018 The Thingsboard Authors
+ * Copyright © 2016-2020 The Thingsboard Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -67,18 +67,6 @@ function Menu(userService, $state, $rootScope) {
                             icon: 'home'
                         },
                         {
-                            name: 'plugin.plugins',
-                            type: 'link',
-                            state: 'home.plugins',
-                            icon: 'extension'
-                        },
-                        {
-                            name: 'rule.rules',
-                            type: 'link',
-                            state: 'home.rules',
-                            icon: 'settings_ethernet'
-                        },
-                        {
                             name: 'tenant.tenants',
                             type: 'link',
                             state: 'home.tenants',
@@ -94,7 +82,7 @@ function Menu(userService, $state, $rootScope) {
                             name: 'admin.system-settings',
                             type: 'toggle',
                             state: 'home.settings',
-                            height: '80px',
+                            height: '120px',
                             icon: 'settings',
                             pages: [
                                 {
@@ -108,26 +96,17 @@ function Menu(userService, $state, $rootScope) {
                                     type: 'link',
                                     state: 'home.settings.outgoing-mail',
                                     icon: 'mail'
+                                },
+                                {
+                                    name: 'admin.security-settings',
+                                    type: 'link',
+                                    state: 'home.settings.security-settings',
+                                    icon: 'security'
                                 }
                             ]
                         }];
                     homeSections =
                         [{
-                            name: 'rule-plugin.management',
-                            places: [
-                                {
-                                    name: 'plugin.plugins',
-                                    icon: 'extension',
-                                    state: 'home.plugins'
-                                },
-                                {
-                                    name: 'rule.rules',
-                                    icon: 'settings_ethernet',
-                                    state: 'home.rules'
-                                }
-                            ]
-                        },
-                        {
                             name: 'tenant.management',
                             places: [
                                 {
@@ -159,6 +138,11 @@ function Menu(userService, $state, $rootScope) {
                                         name: 'admin.outgoing-mail',
                                         icon: 'mail',
                                         state: 'home.settings.outgoing-mail'
+                                    },
+                                    {
+                                        name: 'admin.security-settings',
+                                        icon: 'security',
+                                        state: 'home.settings.security-settings'
                                     }
                                 ]
                             }];
@@ -171,15 +155,9 @@ function Menu(userService, $state, $rootScope) {
                             icon: 'home'
                         },
                         {
-                            name: 'plugin.plugins',
+                            name: 'rulechain.rulechains',
                             type: 'link',
-                            state: 'home.plugins',
-                            icon: 'extension'
-                        },
-                        {
-                            name: 'rule.rules',
-                            type: 'link',
-                            state: 'home.rules',
+                            state: 'home.ruleChains',
                             icon: 'settings_ethernet'
                         },
                         {
@@ -199,6 +177,12 @@ function Menu(userService, $state, $rootScope) {
                             type: 'link',
                             state: 'home.devices',
                             icon: 'devices_other'
+                        },
+                        {
+                            name: 'entity-view.entity-views',
+                            type: 'link',
+                            state: 'home.entityViews',
+                            icon: 'view_quilt'
                         },
                         {
                             name: 'widget.widget-library',
@@ -221,17 +205,12 @@ function Menu(userService, $state, $rootScope) {
 
                     homeSections =
                         [{
-                            name: 'rule-plugin.management',
+                            name: 'rulechain.management',
                             places: [
                                 {
-                                    name: 'plugin.plugins',
-                                    icon: 'extension',
-                                    state: 'home.plugins'
-                                },
-                                {
-                                    name: 'rule.rules',
+                                    name: 'rulechain.rulechains',
                                     icon: 'settings_ethernet',
-                                    state: 'home.rules'
+                                    state: 'home.ruleChains'
                                 }
                             ]
                         },
@@ -262,6 +241,16 @@ function Menu(userService, $state, $rootScope) {
                                         name: 'device.devices',
                                         icon: 'devices_other',
                                         state: 'home.devices'
+                                    }
+                                ]
+                            },
+                            {
+                                name: 'entity-view.management',
+                                places: [
+                                    {
+                                        name: 'entity-view.entity-views',
+                                        icon: 'view_quilt',
+                                        state: 'home.entityViews'
                                     }
                                 ]
                             },
@@ -312,6 +301,12 @@ function Menu(userService, $state, $rootScope) {
                             icon: 'devices_other'
                         },
                         {
+                            name: 'entity-view.entity-views',
+                            type: 'link',
+                            state: 'home.entityViews',
+                            icon: 'view_quilt'
+                        },
+                        {
                             name: 'dashboard.dashboards',
                             type: 'link',
                             state: 'home.dashboards',
@@ -339,16 +334,26 @@ function Menu(userService, $state, $rootScope) {
                                 }
                             ]
                         },
-                            {
-                                name: 'dashboard.view-dashboards',
-                                places: [
-                                    {
-                                        name: 'dashboard.dashboards',
-                                        icon: 'dashboard',
-                                        state: 'home.dashboards'
-                                    }
-                                ]
-                            }];
+                        {
+                            name: 'entity-view.management',
+                            places: [
+                                {
+                                    name: 'entity-view.entity-views',
+                                    icon: 'view_quilt',
+                                    state: 'home.entityViews'
+                                }
+                            ]
+                        },
+                        {
+                            name: 'dashboard.view-dashboards',
+                            places: [
+                                {
+                                    name: 'dashboard.dashboards',
+                                    icon: 'dashboard',
+                                    state: 'home.dashboards'
+                                }
+                            ]
+                        }];
                 }
             }
         }

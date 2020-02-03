@@ -1,5 +1,5 @@
 /**
- * Copyright © 2016-2018 The Thingsboard Authors
+ * Copyright © 2016-2020 The Thingsboard Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,13 +16,15 @@
 .tb-related-entity-autocomplete {
   .tb-not-found {
     display: block;
-    line-height: 1.5;
     height: 48px;
+    line-height: 1.5;
   }
+
   .tb-entity-item {
     display: block;
     height: 48px;
   }
+
   li {
     height: auto !important;
     white-space: normal !important;

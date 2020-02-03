@@ -1,5 +1,5 @@
 /**
- * Copyright © 2016-2018 The Thingsboard Authors
+ * Copyright © 2016-2020 The Thingsboard Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,24 +18,33 @@ package org.thingsboard.server.controller;
 import com.google.common.util.concurrent.ListenableFuture;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
 import org.thingsboard.server.common.data.Customer;
 import org.thingsboard.server.common.data.EntitySubtype;
 import org.thingsboard.server.common.data.EntityType;
 import org.thingsboard.server.common.data.asset.Asset;
+import org.thingsboard.server.common.data.asset.AssetSearchQuery;
 import org.thingsboard.server.common.data.audit.ActionType;
+import org.thingsboard.server.common.data.exception.ThingsboardErrorCode;
+import org.thingsboard.server.common.data.exception.ThingsboardException;
 import org.thingsboard.server.common.data.id.AssetId;
 import org.thingsboard.server.common.data.id.CustomerId;
 import org.thingsboard.server.common.data.id.TenantId;
 import org.thingsboard.server.common.data.page.TextPageData;
 import org.thingsboard.server.common.data.page.TextPageLink;
-import org.thingsboard.server.common.data.asset.AssetSearchQuery;
 import org.thingsboard.server.common.data.security.Authority;
 import org.thingsboard.server.dao.exception.IncorrectParameterException;
 import org.thingsboard.server.dao.model.ModelConstants;
-import org.thingsboard.server.exception.ThingsboardErrorCode;
-import org.thingsboard.server.exception.ThingsboardException;
 import org.thingsboard.server.service.security.model.SecurityUser;
+import org.thingsboard.server.service.security.permission.Operation;
+import org.thingsboard.server.service.security.permission.Resource;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -54,7 +63,7 @@ public class AssetController extends BaseController {
         checkParameter(ASSET_ID, strAssetId);
         try {
             AssetId assetId = new AssetId(toUUID(strAssetId));
-            return checkAssetId(assetId);
+            return checkAssetId(assetId, Operation.READ);
         } catch (Exception e) {
             throw handleException(e);
         }
@@ -66,15 +75,12 @@ public class AssetController extends BaseController {
     public Asset saveAsset(@RequestBody Asset asset) throws ThingsboardException {
         try {
             asset.setTenantId(getCurrentUser().getTenantId());
-            if (getCurrentUser().getAuthority() == Authority.CUSTOMER_USER) {
-                if (asset.getId() == null || asset.getId().isNullUid() ||
-                    asset.getCustomerId() == null || asset.getCustomerId().isNullUid()) {
-                    throw new ThingsboardException("You don't have permission to perform this operation!",
-                            ThingsboardErrorCode.PERMISSION_DENIED);
-                } else {
-                    checkCustomerId(asset.getCustomerId());
-                }
-            }
+
+            Operation operation = asset.getId() == null ? Operation.CREATE : Operation.WRITE;
+
+            accessControlService.checkPermission(getCurrentUser(), Resource.ASSET, operation,
+                    asset.getId(), asset);
+
             Asset savedAsset  = checkNotNull(assetService.saveAsset(asset));
 
             logEntityAction(savedAsset.getId(), savedAsset,
@@ -96,8 +102,8 @@ public class AssetController extends BaseController {
         checkParameter(ASSET_ID, strAssetId);
         try {
             AssetId assetId = new AssetId(toUUID(strAssetId));
-            Asset asset = checkAssetId(assetId);
-            assetService.deleteAsset(assetId);
+            Asset asset = checkAssetId(assetId, Operation.DELETE);
+            assetService.deleteAsset(getTenantId(), assetId);
 
             logEntityAction(assetId, asset,
                     asset.getCustomerId(),
@@ -121,12 +127,12 @@ public class AssetController extends BaseController {
         checkParameter(ASSET_ID, strAssetId);
         try {
             CustomerId customerId = new CustomerId(toUUID(strCustomerId));
-            Customer customer = checkCustomerId(customerId);
+            Customer customer = checkCustomerId(customerId, Operation.READ);
 
             AssetId assetId = new AssetId(toUUID(strAssetId));
-            checkAssetId(assetId);
+            checkAssetId(assetId, Operation.ASSIGN_TO_CUSTOMER);
 
-            Asset savedAsset = checkNotNull(assetService.assignAssetToCustomer(assetId, customerId));
+            Asset savedAsset = checkNotNull(assetService.assignAssetToCustomer(getTenantId(), assetId, customerId));
 
             logEntityAction(assetId, savedAsset,
                     savedAsset.getCustomerId(),
@@ -150,14 +156,14 @@ public class AssetController extends BaseController {
         checkParameter(ASSET_ID, strAssetId);
         try {
             AssetId assetId = new AssetId(toUUID(strAssetId));
-            Asset asset = checkAssetId(assetId);
+            Asset asset = checkAssetId(assetId, Operation.UNASSIGN_FROM_CUSTOMER);
             if (asset.getCustomerId() == null || asset.getCustomerId().getId().equals(ModelConstants.NULL_UUID)) {
                 throw new IncorrectParameterException("Asset isn't assigned to any customer!");
             }
 
-            Customer customer = checkCustomerId(asset.getCustomerId());
+            Customer customer = checkCustomerId(asset.getCustomerId(), Operation.READ);
 
-            Asset savedAsset = checkNotNull(assetService.unassignAssetFromCustomer(assetId));
+            Asset savedAsset = checkNotNull(assetService.unassignAssetFromCustomer(getTenantId(), assetId));
 
             logEntityAction(assetId, asset,
                     asset.getCustomerId(),
@@ -181,9 +187,9 @@ public class AssetController extends BaseController {
         checkParameter(ASSET_ID, strAssetId);
         try {
             AssetId assetId = new AssetId(toUUID(strAssetId));
-            Asset asset = checkAssetId(assetId);
+            Asset asset = checkAssetId(assetId, Operation.ASSIGN_TO_CUSTOMER);
             Customer publicCustomer = customerService.findOrCreatePublicCustomer(asset.getTenantId());
-            Asset savedAsset = checkNotNull(assetService.assignAssetToCustomer(assetId, publicCustomer.getId()));
+            Asset savedAsset = checkNotNull(assetService.assignAssetToCustomer(getTenantId(), assetId, publicCustomer.getId()));
 
             logEntityAction(assetId, savedAsset,
                     savedAsset.getCustomerId(),
@@ -249,7 +255,7 @@ public class AssetController extends BaseController {
         try {
             TenantId tenantId = getCurrentUser().getTenantId();
             CustomerId customerId = new CustomerId(toUUID(strCustomerId));
-            checkCustomerId(customerId);
+            checkCustomerId(customerId, Operation.READ);
             TextPageLink pageLink = createPageLink(limit, textSearch, idOffset, textOffset);
             if (type != null && type.trim().length()>0) {
                 return checkNotNull(assetService.findAssetsByTenantIdAndCustomerIdAndType(tenantId, customerId, type, pageLink));
@@ -294,12 +300,12 @@ public class AssetController extends BaseController {
         checkNotNull(query);
         checkNotNull(query.getParameters());
         checkNotNull(query.getAssetTypes());
-        checkEntityId(query.getParameters().getEntityId());
+        checkEntityId(query.getParameters().getEntityId(), Operation.READ);
         try {
-            List<Asset> assets = checkNotNull(assetService.findAssetsByQuery(query).get());
+            List<Asset> assets = checkNotNull(assetService.findAssetsByQuery(getTenantId(), query).get());
             assets = assets.stream().filter(asset -> {
                 try {
-                    checkAsset(asset);
+                    accessControlService.checkPermission(getCurrentUser(), Resource.ASSET, Operation.READ, asset.getId(), asset);
                     return true;
                 } catch (ThingsboardException e) {
                     return false;

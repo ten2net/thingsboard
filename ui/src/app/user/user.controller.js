@@ -1,5 +1,5 @@
 /*
- * Copyright © 2016-2018 The Thingsboard Authors
+ * Copyright © 2016-2020 The Thingsboard Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,17 @@ export default function UserController(userService, toast, $scope, $mdDialog, $d
     var usersType = $state.$current.data.usersType;
 
     var userActionsList = [
+        {
+            onAction: function ($event, item) {
+                loginAsUser(item);
+            },
+            name: function() { return $translate.instant('login.login') },
+            details: function() { return $translate.instant(usersType === 'tenant' ? 'user.login-as-tenant-admin' : 'user.login-as-customer-user') },
+            icon: "login",
+            isEnabled: function() {
+                return userService.isUserTokenAccessEnabled();
+            }
+        },
         {
             onAction: function ($event, item) {
                 vm.grid.deleteItem($event, item);
@@ -78,6 +89,8 @@ export default function UserController(userService, toast, $scope, $mdDialog, $d
 
     vm.displayActivationLink = displayActivationLink;
     vm.resendActivation = resendActivation;
+    vm.loginAsUser = loginAsUser;
+    vm.setUserCredentialsEnabled = setUserCredentialsEnabled;
 
     initController();
 
@@ -164,6 +177,22 @@ export default function UserController(userService, toast, $scope, $mdDialog, $d
         );
     }
 
+    function setUserCredentialsEnabled(user, userCredentialsEnabled) {
+        userService.setUserCredentialsEnabled(user.id.id, userCredentialsEnabled).then(
+            () => {
+                if (!user.additionalInfo) {
+                    user.additionalInfo = {};
+                }
+                user.additionalInfo.userCredentialsEnabled = userCredentialsEnabled;
+                if (userCredentialsEnabled) {
+                    toast.showSuccess($translate.instant('user.enable-account-message'));
+                } else {
+                    toast.showSuccess($translate.instant('user.disable-account-message'));
+                }
+            }
+        )
+    }
+
     function openActivationLinkDialog(event, activationLink) {
         $mdDialog.show({
             controller: 'ActivationLinkDialogController',
@@ -174,7 +203,7 @@ export default function UserController(userService, toast, $scope, $mdDialog, $d
             },
             parent: angular.element($document[0].body),
             fullscreen: true,
-            skipHide: true,
+            multiple: true,
             targetEvent: event
         });
     }
@@ -183,5 +212,9 @@ export default function UserController(userService, toast, $scope, $mdDialog, $d
         userService.sendActivationEmail(user.email).then(function success() {
             toast.showSuccess($translate.instant('user.activation-email-sent-message'));
         });
+    }
+
+    function loginAsUser(user) {
+        userService.loginAsUser(user.id.id);
     }
 }

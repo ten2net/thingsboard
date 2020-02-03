@@ -1,5 +1,5 @@
 /**
- * Copyright © 2016-2018 The Thingsboard Authors
+ * Copyright © 2016-2020 The Thingsboard Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,10 +34,17 @@ import org.thingsboard.server.common.data.HasName;
 import org.thingsboard.server.common.data.audit.ActionStatus;
 import org.thingsboard.server.common.data.audit.ActionType;
 import org.thingsboard.server.common.data.audit.AuditLog;
-import org.thingsboard.server.common.data.id.*;
+import org.thingsboard.server.common.data.id.AuditLogId;
+import org.thingsboard.server.common.data.id.CustomerId;
+import org.thingsboard.server.common.data.id.EntityId;
+import org.thingsboard.server.common.data.id.TenantId;
+import org.thingsboard.server.common.data.id.UUIDBased;
+import org.thingsboard.server.common.data.id.UserId;
 import org.thingsboard.server.common.data.kv.AttributeKvEntry;
 import org.thingsboard.server.common.data.page.TimePageData;
 import org.thingsboard.server.common.data.page.TimePageLink;
+import org.thingsboard.server.common.data.relation.EntityRelation;
+import org.thingsboard.server.common.data.rule.RuleChainMetaData;
 import org.thingsboard.server.common.data.security.DeviceCredentials;
 import org.thingsboard.server.dao.audit.sink.AuditLogSink;
 import org.thingsboard.server.dao.entity.EntityService;
@@ -53,7 +60,7 @@ import static org.thingsboard.server.dao.service.Validator.validateId;
 
 @Slf4j
 @Service
-@ConditionalOnProperty(prefix = "audit_log", value = "enabled", havingValue = "true")
+@ConditionalOnProperty(prefix = "audit-log", value = "enabled", havingValue = "true")
 public class AuditLogServiceImpl implements AuditLogService {
 
     private static final ObjectMapper objectMapper = new ObjectMapper();
@@ -74,42 +81,42 @@ public class AuditLogServiceImpl implements AuditLogService {
     private AuditLogSink auditLogSink;
 
     @Override
-    public TimePageData<AuditLog> findAuditLogsByTenantIdAndCustomerId(TenantId tenantId, CustomerId customerId, TimePageLink pageLink) {
+    public TimePageData<AuditLog> findAuditLogsByTenantIdAndCustomerId(TenantId tenantId, CustomerId customerId, List<ActionType> actionTypes, TimePageLink pageLink) {
         log.trace("Executing findAuditLogsByTenantIdAndCustomerId [{}], [{}], [{}]", tenantId, customerId, pageLink);
         validateId(tenantId, INCORRECT_TENANT_ID + tenantId);
         validateId(customerId, "Incorrect customerId " + customerId);
-        List<AuditLog> auditLogs = auditLogDao.findAuditLogsByTenantIdAndCustomerId(tenantId.getId(), customerId, pageLink);
+        List<AuditLog> auditLogs = auditLogDao.findAuditLogsByTenantIdAndCustomerId(tenantId.getId(), customerId, actionTypes, pageLink);
         return new TimePageData<>(auditLogs, pageLink);
     }
 
     @Override
-    public TimePageData<AuditLog> findAuditLogsByTenantIdAndUserId(TenantId tenantId, UserId userId, TimePageLink pageLink) {
+    public TimePageData<AuditLog> findAuditLogsByTenantIdAndUserId(TenantId tenantId, UserId userId, List<ActionType> actionTypes, TimePageLink pageLink) {
         log.trace("Executing findAuditLogsByTenantIdAndUserId [{}], [{}], [{}]", tenantId, userId, pageLink);
         validateId(tenantId, INCORRECT_TENANT_ID + tenantId);
         validateId(userId, "Incorrect userId" + userId);
-        List<AuditLog> auditLogs = auditLogDao.findAuditLogsByTenantIdAndUserId(tenantId.getId(), userId, pageLink);
+        List<AuditLog> auditLogs = auditLogDao.findAuditLogsByTenantIdAndUserId(tenantId.getId(), userId, actionTypes, pageLink);
         return new TimePageData<>(auditLogs, pageLink);
     }
 
     @Override
-    public TimePageData<AuditLog> findAuditLogsByTenantIdAndEntityId(TenantId tenantId, EntityId entityId, TimePageLink pageLink) {
+    public TimePageData<AuditLog> findAuditLogsByTenantIdAndEntityId(TenantId tenantId, EntityId entityId, List<ActionType> actionTypes, TimePageLink pageLink) {
         log.trace("Executing findAuditLogsByTenantIdAndEntityId [{}], [{}], [{}]", tenantId, entityId, pageLink);
         validateId(tenantId, INCORRECT_TENANT_ID + tenantId);
         validateEntityId(entityId, INCORRECT_TENANT_ID + entityId);
-        List<AuditLog> auditLogs = auditLogDao.findAuditLogsByTenantIdAndEntityId(tenantId.getId(), entityId, pageLink);
+        List<AuditLog> auditLogs = auditLogDao.findAuditLogsByTenantIdAndEntityId(tenantId.getId(), entityId, actionTypes, pageLink);
         return new TimePageData<>(auditLogs, pageLink);
     }
 
     @Override
-    public TimePageData<AuditLog> findAuditLogsByTenantId(TenantId tenantId, TimePageLink pageLink) {
+    public TimePageData<AuditLog> findAuditLogsByTenantId(TenantId tenantId, List<ActionType> actionTypes, TimePageLink pageLink) {
         log.trace("Executing findAuditLogs [{}]", pageLink);
         validateId(tenantId, INCORRECT_TENANT_ID + tenantId);
-        List<AuditLog> auditLogs = auditLogDao.findAuditLogsByTenantId(tenantId.getId(), pageLink);
+        List<AuditLog> auditLogs = auditLogDao.findAuditLogsByTenantId(tenantId.getId(), actionTypes, pageLink);
         return new TimePageData<>(auditLogs, pageLink);
     }
 
     @Override
-    public <E extends BaseData<I> & HasName, I extends UUIDBased & EntityId> ListenableFuture<List<Void>>
+    public <E extends HasName, I extends EntityId> ListenableFuture<List<Void>>
         logEntityAction(TenantId tenantId, CustomerId customerId, UserId userId, String userName, I entityId, E entity,
                                ActionType actionType, Exception e, Object... additionalInfo) {
         if (canLog(entityId.getEntityType(), actionType)) {
@@ -121,7 +128,7 @@ public class AuditLogServiceImpl implements AuditLogService {
                 entityName = entity.getName();
             } else {
                 try {
-                    entityName = entityService.fetchEntityNameAsync(entityId).get();
+                    entityName = entityService.fetchEntityNameAsync(tenantId, entityId).get();
                 } catch (Exception ex) {}
             }
             if (e != null) {
@@ -150,19 +157,30 @@ public class AuditLogServiceImpl implements AuditLogService {
         }
     }
 
-    private <E extends BaseData<I> & HasName, I extends UUIDBased & EntityId> JsonNode constructActionData(I entityId,
-                                                                                                           E entity,
+    private <E extends HasName, I extends EntityId> JsonNode constructActionData(I entityId, E entity,
                                                                                                            ActionType actionType,
                                                                                                            Object... additionalInfo) {
         ObjectNode actionData = objectMapper.createObjectNode();
         switch(actionType) {
             case ADDED:
             case UPDATED:
-                ObjectNode entityNode = objectMapper.valueToTree(entity);
-                if (entityId.getEntityType() == EntityType.DASHBOARD) {
-                    entityNode.put("configuration", "");
+            case ALARM_ACK:
+            case ALARM_CLEAR:
+            case RELATIONS_DELETED:
+                if (entity != null) {
+                    ObjectNode entityNode = objectMapper.valueToTree(entity);
+                    if (entityId.getEntityType() == EntityType.DASHBOARD) {
+                        entityNode.put("configuration", "");
+                    }
+                    actionData.set("entity", entityNode);
                 }
-                actionData.set("entity", entityNode);
+                if (entityId.getEntityType() == EntityType.RULE_CHAIN) {
+                    RuleChainMetaData ruleChainMetaData = extractParameter(RuleChainMetaData.class, additionalInfo);
+                    if (ruleChainMetaData != null) {
+                        ObjectNode ruleChainMetaDataNode = objectMapper.valueToTree(ruleChainMetaData);
+                        actionData.set("metadata", ruleChainMetaDataNode);
+                    }
+                }
                 break;
             case DELETED:
             case ACTIVATED:
@@ -224,6 +242,23 @@ public class AuditLogServiceImpl implements AuditLogService {
                 actionData.put("entityId", strEntityId);
                 actionData.put("unassignedCustomerId", strCustomerId);
                 actionData.put("unassignedCustomerName", strCustomerName);
+                break;
+            case RELATION_ADD_OR_UPDATE:
+            case RELATION_DELETED:
+                EntityRelation relation = extractParameter(EntityRelation.class, 0, additionalInfo);
+                actionData.set("relation", objectMapper.valueToTree(relation));
+                break;
+            case LOGIN:
+            case LOGOUT:
+            case LOCKOUT:
+                String clientAddress = extractParameter(String.class, 0, additionalInfo);
+                String browser = extractParameter(String.class, 1, additionalInfo);
+                String os = extractParameter(String.class, 2, additionalInfo);
+                String device = extractParameter(String.class, 3, additionalInfo);
+                actionData.put("clientAddress", clientAddress);
+                actionData.put("browser", browser);
+                actionData.put("os", os);
+                actionData.put("device", device);
                 break;
         }
         return actionData;
@@ -292,7 +327,7 @@ public class AuditLogServiceImpl implements AuditLogService {
         AuditLog auditLogEntry = createAuditLogEntry(tenantId, entityId, entityName, customerId, userId, userName,
                 actionType, actionData, actionStatus, actionFailureDetails);
         log.trace("Executing logAction [{}]", auditLogEntry);
-        auditLogValidator.validate(auditLogEntry);
+        auditLogValidator.validate(auditLogEntry, AuditLog::getTenantId);
         List<ListenableFuture<Void>> futures = Lists.newArrayListWithExpectedSize(INSERTS_PER_ENTRY);
         futures.add(auditLogDao.savePartitionsByTenantId(auditLogEntry));
         futures.add(auditLogDao.saveByTenantId(auditLogEntry));
@@ -308,7 +343,7 @@ public class AuditLogServiceImpl implements AuditLogService {
     private DataValidator<AuditLog> auditLogValidator =
             new DataValidator<AuditLog>() {
                 @Override
-                protected void validateDataImpl(AuditLog auditLog) {
+                protected void validateDataImpl(TenantId tenantId, AuditLog auditLog) {
                     if (auditLog.getEntityId() == null) {
                         throw new DataValidationException("Entity Id should be specified!");
                     }

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2016-2018 The Thingsboard Authors
+ * Copyright © 2016-2020 The Thingsboard Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,7 @@ import './manage-widget-actions.scss';
 import thingsboardMaterialIconSelect from '../../material-icon-select.directive';
 
 import WidgetActionDialogController from './widget-action-dialog.controller';
+import CustomActionPrettyEditor from './custom-action-pretty-editor.directive';
 
 /* eslint-disable import/no-unresolved, import/default */
 
@@ -45,7 +46,7 @@ import widgetActionDialogTemplate from './widget-action-dialog.tpl.html';
 
 /* eslint-enable import/no-unresolved, import/default */
 
-export default angular.module('thingsboard.directives.widgetActions', [thingsboardMaterialIconSelect])
+export default angular.module('thingsboard.directives.widgetActions', [thingsboardMaterialIconSelect, CustomActionPrettyEditor])
     .controller('WidgetActionDialogController', WidgetActionDialogController)
     .directive('tbManageWidgetActions', ManageWidgetActions)
     .name;
@@ -111,8 +112,15 @@ function ManageWidgetActionsController($rootScope, $scope, $document, $mdDialog,
         }
     });
 
-    function enterFilterMode () {
+    function enterFilterMode (event) {
+        let $button = angular.element(event.currentTarget);
+        let $toolbarsContainer = $button.closest('.toolbarsContainer');
+
         vm.query.search = '';
+
+        $timeout(()=>{
+            $toolbarsContainer.find('.searchInput').focus();
+        })
     }
 
     function exitFilterMode () {
@@ -157,7 +165,7 @@ function ManageWidgetActionsController($rootScope, $scope, $document, $mdDialog,
                 .cancel($translate.instant('action.no'))
                 .ok($translate.instant('action.yes'));
 
-            confirm._options.skipHide = true;
+            confirm._options.multiple = true;
             confirm._options.fullscreen = true;
 
             $mdDialog.show(confirm).then(function () {
@@ -205,7 +213,7 @@ function ManageWidgetActionsController($rootScope, $scope, $document, $mdDialog,
             locals: {isAdd: isAdd, fetchDashboardStates: vm.fetchDashboardStates,
                 actionSources: availableActionSources, widgetActions: vm.widgetActions,
                 action: angular.copy(action)},
-            skipHide: true,
+            multiple: true,
             fullscreen: true,
             targetEvent: $event
         }).then(function (action) {
@@ -237,13 +245,18 @@ function ManageWidgetActionsController($rootScope, $scope, $document, $mdDialog,
             vm.widgetActions[actionSourceId] = targetActions;
         }
         if (prevActionId) {
-            var index = getActionIndex(prevActionId, vm.allActions);
-            if (index > -1) {
-                vm.allActions[index] = action;
+            const indexInTarget = getActionIndex(prevActionId, targetActions);
+            const indexInAllActions = getActionIndex(prevActionId, vm.allActions);
+            if (indexInTarget > -1) {
+                targetActions[indexInTarget] = widgetAction;
+            } else if (indexInAllActions > -1) {
+                const prevActionSourceId = vm.allActions[indexInAllActions].actionSourceId;
+                const index = getActionIndex(prevActionId,vm.widgetActions[prevActionSourceId]);
+                vm.widgetActions[prevActionSourceId].splice(index,1);
+                targetActions.push(widgetAction);
             }
-            index = getActionIndex(prevActionId, targetActions);
-            if (index > -1) {
-                targetActions[index] = widgetAction;
+            if (indexInAllActions > -1) {
+                vm.allActions[indexInAllActions] = action;
             }
         } else {
             vm.allActions.push(action);

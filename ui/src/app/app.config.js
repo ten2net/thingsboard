@@ -1,5 +1,5 @@
 /*
- * Copyright © 2016-2018 The Thingsboard Authors
+ * Copyright © 2016-2020 The Thingsboard Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,10 +15,6 @@
  */
 import injectTapEventPlugin from 'react-tap-event-plugin';
 import UrlHandler from './url.handler';
-import addLocaleKorean from './locale/locale.constant-ko';
-import addLocaleChinese from './locale/locale.constant-zh';
-import addLocaleRussian from './locale/locale.constant-ru';
-import addLocaleSpanish from './locale/locale.constant-es';
 
 /* eslint-disable import/no-unresolved, import/default */
 
@@ -35,49 +31,32 @@ export default function AppConfig($provide,
                                   $urlRouterProvider,
                                   $locationProvider,
                                   $mdIconProvider,
+                                  ngMdIconServiceProvider,
                                   $mdThemingProvider,
                                   $httpProvider,
                                   $translateProvider,
-                                  storeProvider,
-                                  locales) {
+                                  storeProvider) {
 
     injectTapEventPlugin();
     $locationProvider.html5Mode(true);
     $urlRouterProvider.otherwise(UrlHandler);
     storeProvider.setCaching(false);
-
-    $translateProvider.useSanitizeValueStrategy(null);
-    $translateProvider.useMissingTranslationHandler('tbMissingTranslationHandler');
-    $translateProvider.addInterpolation('$translateMessageFormatInterpolation');
-    $translateProvider.fallbackLanguage('en_US');
-
-    addLocaleKorean(locales);
-    addLocaleChinese(locales);
-    addLocaleRussian(locales);
-    addLocaleSpanish(locales);
-
-    for (var langKey in locales) {
-        var translationTable = locales[langKey];
-        $translateProvider.translations(langKey, translationTable);
-    }
-
-    var lang = $translateProvider.resolveClientLocale();
-    if (lang) {
-        lang = lang.toLowerCase();
-        if (lang.startsWith('ko')) {
-            $translateProvider.preferredLanguage('ko_KR');
-        } else if (lang.startsWith('zh')) {
-            $translateProvider.preferredLanguage('zh_CN');
-        } else if (lang.startsWith('es')) {
-            $translateProvider.preferredLanguage('es_ES');
-        } else if (lang.startsWith('ru')) {
-            $translateProvider.preferredLanguage('ru_RU');
-        } else {
-            $translateProvider.preferredLanguage('en_US');
-        }
-    } else {
-        $translateProvider.preferredLanguage('en_US');
-    }
+    
+    $translateProvider.useSanitizeValueStrategy(null)
+                      .useMissingTranslationHandler('tbMissingTranslationHandler')
+                      .addInterpolation('$translateMessageFormatInterpolation')
+                      .useStaticFilesLoader({
+                          files: [
+                              {
+                                  prefix: PUBLIC_PATH + 'locale/locale.constant-', //eslint-disable-line
+                                  suffix: '.json'
+                              }
+                          ]
+                      })
+                      .registerAvailableLanguageKeys(SUPPORTED_LANGS, getLanguageAliases(SUPPORTED_LANGS)) //eslint-disable-line
+                      .fallbackLanguage('en_US') // must be before determinePreferredLanguage   
+                      .uniformLanguageTag('java')  // must be before determinePreferredLanguage
+                      .determinePreferredLanguage();                
 
     $httpProvider.interceptors.push('globalInterceptor');
 
@@ -97,6 +76,10 @@ export default function AppConfig($provide,
     }]);
 
     $mdIconProvider.iconSet('mdi', mdiIconSet);
+
+    ngMdIconServiceProvider
+        .addShape('alpha-a-circle-outline', '<path d="M11,7H13A2,2 0 0,1 15,9V17H13V13H11V17H9V9A2,2 0 0,1 11,7M11,9V11H13V9H11M12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2Z" />')
+        .addShape('alpha-e-circle-outline', '<path d="M9,7H15V9H11V11H15V13H11V15H15V17H9V7M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4Z" />');
 
     configureTheme();
 
@@ -168,4 +151,24 @@ export default function AppConfig($provide,
         //$mdThemingProvider.alwaysWatchTheme(true);
     }
 
+    function getLanguageAliases(supportedLangs) {
+        var aliases = {};
+
+        supportedLangs.sort().forEach(function(item, index, array) {
+            if (item.length === 2) { 
+                aliases[item] = item;
+                aliases[item + '_*'] = item;
+            } else {
+                var key = item.slice(0, 2);
+                if (index === 0 || key !== array[index - 1].slice(0, 2)) {
+                    aliases[key] = item;
+                    aliases[key + '_*'] = item;
+                } else {
+                    aliases[item] = item;
+                }
+            }
+        });
+        
+        return aliases;
+    }
 }
